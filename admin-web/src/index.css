@@ -1,0 +1,92 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #f1f5f9; color: #0f172a; }
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; }
+.center { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 240px; background: #0f172a; color: #e2e8f0;
+  display: flex; flex-direction: column; padding: 1.25rem;
+}
+.brand { font-size: 1.25rem; font-weight: 700; margin-bottom: 2rem; color: #fff; }
+.sidebar nav { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; }
+.sidebar nav a {
+  padding: 0.6rem 0.75rem; border-radius: 8px; color: #94a3b8;
+}
+.sidebar nav a.active, .sidebar nav a:hover { background: #1e293b; color: #fff; }
+.sidebar-foot { border-top: 1px solid #334155; padding-top: 1rem; font-size: 0.85rem; }
+.sidebar-foot button {
+  margin-top: 0.5rem; background: transparent; border: 1px solid #475569;
+  color: #cbd5e1; padding: 0.35rem 0.75rem; border-radius: 6px; cursor: pointer;
+}
+.main { flex: 1; padding: 2rem; overflow: auto; }
+
+.page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.card {
+  background: #fff; border-radius: 12px; padding: 1.25rem;
+  border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.card .label { font-size: 0.8rem; color: #64748b; margin-bottom: 0.25rem; }
+.card .value { font-size: 1.75rem; font-weight: 700; }
+
+.table-wrap { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #f1f5f9; }
+th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 0.8rem; }
+tr:hover td { background: #fafafa; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.5rem 1rem; border-radius: 8px; border: none; cursor: pointer;
+  font-weight: 500; font-size: 0.875rem;
+}
+.btn-primary { background: #4f46e5; color: #fff; }
+.btn-secondary { background: #e2e8f0; color: #334155; }
+.btn-danger { background: #fee2e2; color: #b91c1c; }
+.btn-sm { padding: 0.35rem 0.65rem; font-size: 0.8rem; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.35rem; color: #475569; }
+.form-group input, .form-group textarea, .form-group select {
+  width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #cbd5e1;
+  border-radius: 8px; background: #fff;
+}
+.form-group textarea { min-height: 120px; font-family: monospace; font-size: 0.85rem; }
+
+.login-page {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+}
+.login-card {
+  background: #fff; padding: 2rem; border-radius: 16px; width: 100%; max-width: 400px;
+  box-shadow: 0 25px 50px rgba(0,0,0,.25);
+}
+.login-card h1 { margin-bottom: 0.25rem; }
+.login-card p { color: #64748b; margin-bottom: 1.5rem; font-size: 0.9rem; }
+.error { color: #b91c1c; font-size: 0.85rem; margin-bottom: 1rem; }
+
+.toolbar { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+.badge {
+  display: inline-block; padding: 0.2rem 0.5rem; border-radius: 999px;
+  font-size: 0.75rem; font-weight: 600;
+}
+.badge-ready { background: #dcfce7; color: #166534; }
+.badge-qr { background: #fef9c3; color: #854d0e; }
+.badge-off { background: #f1f5f9; color: #64748b; }
+
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.modal { background: #fff; border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 480px; }
+.modal h3 { margin-bottom: 1rem; }
+.modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+.qr-box {
+  background: #fff; padding: 1.5rem; border-radius: 12px; text-align: center;
+  border: 1px solid #e2e8f0; max-width: 360px;
+}
+.qr-box p { color: #64748b; font-size: 0.9rem; margin-top: 1rem; }

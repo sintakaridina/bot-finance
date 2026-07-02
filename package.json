@@ -1,0 +1,32 @@
+{
+  "name": "finance-bot",
+  "version": "2.0.0",
+  "description": "WhatsApp expense tracker with multi-tenant web admin platform",
+  "scripts": {
+    "start": "node server/src/server.js",
+    "migrate": "node server/src/db/migrate.js",
+    "dev:server": "node --watch server/src/server.js",
+    "dev:admin": "cd admin-web && npm run dev",
+    "build:admin": "cd admin-web && npm run build",
+    "deploy:web": "bash scripts/deploy-web.sh",
+    "deploy": "bash scripts/deploy.sh",
+    "postinstall": "cd admin-web && npm install && npx puppeteer browsers install chrome"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.7.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pdfkit": "^0.16.0",
+    "puppeteer": "^24.38.0",
+    "socket.io": "^4.8.1",
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main"
+  }
+}
