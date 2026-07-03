@@ -45,6 +45,7 @@ function runSchema(db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       bot_instance_id INTEGER REFERENCES bot_instances(id),
       chat_id TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'out' CHECK(type IN ('out', 'in')),
       category TEXT NOT NULL,
       amount INTEGER NOT NULL,
       detail TEXT,
@@ -55,10 +56,15 @@ function runSchema(db) {
   `);
 
   const cols = db.prepare(`PRAGMA table_info(expenses)`).all();
-  const hasBotInstance = cols.some((c) => c.name === 'bot_instance_id');
-  if (!hasBotInstance) {
+  const colNames = cols.map((c) => c.name);
+  if (!colNames.includes('bot_instance_id')) {
     db.exec(`ALTER TABLE expenses ADD COLUMN bot_instance_id INTEGER REFERENCES bot_instances(id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_expenses_bot ON expenses(bot_instance_id)`);
+  }
+  if (!colNames.includes('type')) {
+    db.exec(`ALTER TABLE expenses ADD COLUMN type TEXT NOT NULL DEFAULT 'out' CHECK(type IN ('out', 'in'))`);
+    db.exec(`UPDATE expenses SET type = 'out' WHERE type IS NULL`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_expenses_type ON expenses(type)`);
   }
 }
 

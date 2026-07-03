@@ -18,7 +18,9 @@ const COLORS = {
   border: '#e2e8f0',
   rowAlt: '#f8fafc',
   white: '#ffffff',
-  amount: '#b91c1c',
+  income: '#15803d',
+  expense: '#b91c1c',
+  net: '#0f172a',
 };
 
 const CATEGORY_PALETTE = [
@@ -41,6 +43,8 @@ function categoryColor(category, index) {
     tagihan: '#14b8a6',
     hiburan: '#f97316',
     kesehatan: '#10b981',
+    gaji: '#15803d',
+    salary: '#15803d',
   };
   return map[key] || CATEGORY_PALETTE[index % CATEGORY_PALETTE.length];
 }
@@ -64,6 +68,27 @@ function generatedAt() {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function sumTotals(expenses) {
+  let totalIn = 0;
+  let totalOut = 0;
+  for (const e of expenses) {
+    if (e.type === 'in') totalIn += e.amount;
+    else totalOut += e.amount;
+  }
+  return { totalIn, totalOut, net: totalIn - totalOut };
+}
+
+function groupByCategory(expenses, type) {
+  const filtered = expenses.filter((e) => e.type === type);
+  const byCategory = {};
+  for (const exp of filtered) {
+    if (!byCategory[exp.category]) byCategory[exp.category] = { total: 0, items: [] };
+    byCategory[exp.category].total += exp.amount;
+    byCategory[exp.category].items.push(exp);
+  }
+  return Object.entries(byCategory).sort((a, b) => b[1].total - a[1].total);
 }
 
 function ensureSpace(doc, needed) {
@@ -93,16 +118,15 @@ function addPageWithFooter(doc) {
   doc.addPage();
 }
 
-function drawHeader(doc, yearMonth, total, txCount, catCount) {
+function drawHeader(doc, yearMonth, totals, txCount) {
   const headerH = 88;
 
   doc.save();
   doc.rect(0, 0, PAGE.w, headerH).fill(COLORS.primary);
-
   doc.rect(0, headerH - 4, PAGE.w, 4).fill(COLORS.accent);
 
   doc.fillColor(COLORS.white).fontSize(20)
-    .text('Expense Report', PAGE.margin, 26, { width: CONTENT_W });
+    .text('Finance Report', PAGE.margin, 26, { width: CONTENT_W });
 
   doc.fontSize(11).fillColor('#94a3b8')
     .text(formatMonthLabel(yearMonth), PAGE.margin, 52);
@@ -116,13 +140,14 @@ function drawHeader(doc, yearMonth, total, txCount, catCount) {
 
   const cardY = doc.y;
   const cardH = 62;
-  const gap = 10;
-  const cardW = (CONTENT_W - gap * 2) / 3;
+  const gap = 8;
+  const cardW = (CONTENT_W - gap * 3) / 4;
 
   const stats = [
-    { label: 'Total Expenses', value: formatAmount(total), color: COLORS.amount },
-    { label: 'Transactions', value: String(txCount), color: COLORS.primary },
-    { label: 'Categories', value: String(catCount), color: COLORS.accent },
+    { label: 'Income', value: formatAmount(totals.totalIn), color: COLORS.income },
+    { label: 'Expenses', value: formatAmount(totals.totalOut), color: COLORS.expense },
+    { label: 'Net Balance', value: formatAmount(totals.net), color: COLORS.net },
+    { label: 'Transactions', value: String(txCount), color: COLORS.accent },
   ];
 
   stats.forEach((stat, i) => {
@@ -130,11 +155,11 @@ function drawHeader(doc, yearMonth, total, txCount, catCount) {
     doc.roundedRect(x, cardY, cardW, cardH, 6)
       .fillAndStroke(COLORS.rowAlt, COLORS.border);
 
-    doc.fontSize(8).fillColor(COLORS.muted)
-      .text(stat.label, x + 12, cardY + 12, { width: cardW - 24 });
+    doc.fontSize(7.5).fillColor(COLORS.muted)
+      .text(stat.label, x + 10, cardY + 12, { width: cardW - 20 });
 
-    doc.fontSize(stat.label === 'Total Expenses' ? 13 : 16).fillColor(stat.color)
-      .text(stat.value, x + 12, cardY + 28, { width: cardW - 24 });
+    doc.fontSize(stat.label === 'Transactions' ? 14 : 11).fillColor(stat.color)
+      .text(stat.value, x + 10, cardY + 28, { width: cardW - 20 });
   });
 
   doc.y = cardY + cardH + 28;
@@ -153,8 +178,10 @@ function drawSectionTitle(doc, title) {
   doc.y = y + 28;
 }
 
-function drawCategoryBreakdown(doc, sortedCategories, total) {
-  drawSectionTitle(doc, 'Summary by Category');
+function drawCategoryBreakdown(doc, title, sortedCategories, total, barColor) {
+  if (!sortedCategories.length) return;
+
+  drawSectionTitle(doc, title);
 
   const labelW = 90;
   const amountW = 100;
@@ -174,14 +201,10 @@ function drawCategoryBreakdown(doc, sortedCategories, total) {
     doc.fontSize(9).fillColor(COLORS.text)
       .text(cat, PAGE.margin, y + 5, { width: labelW, ellipsis: true });
 
-    doc.roundedRect(barX, y + 4, barMaxW, 12, 3)
-      .fill(COLORS.border);
+    doc.roundedRect(barX, y + 4, barMaxW, 12, 3).fill(COLORS.border);
+    if (barW > 0) doc.roundedRect(barX, y + 4, barW, 12, 3).fill(color);
 
-    if (barW > 0) {
-      doc.roundedRect(barX, y + 4, barW, 12, 3).fill(color);
-    }
-
-    doc.fontSize(8.5).fillColor(COLORS.muted)
+    doc.fontSize(8.5).fillColor(barColor)
       .text(
         `${formatAmount(data.total)}  ·  ${pct.toFixed(1)}%`,
         PAGE.w - PAGE.margin - amountW,
@@ -197,11 +220,12 @@ function drawCategoryBreakdown(doc, sortedCategories, total) {
 
 function drawTableHeader(doc, y) {
   const cols = {
-    no: { x: PAGE.margin, w: 28 },
-    date: { x: PAGE.margin + 28, w: 52 },
-    category: { x: PAGE.margin + 80, w: 80 },
-    detail: { x: PAGE.margin + 160, w: 230 },
-    amount: { x: PAGE.margin + 390, w: CONTENT_W - 390 },
+    no: { x: PAGE.margin, w: 24 },
+    type: { x: PAGE.margin + 24, w: 28 },
+    date: { x: PAGE.margin + 52, w: 48 },
+    category: { x: PAGE.margin + 100, w: 72 },
+    detail: { x: PAGE.margin + 172, w: 200 },
+    amount: { x: PAGE.margin + 372, w: CONTENT_W - 372 },
   };
 
   doc.save();
@@ -209,6 +233,7 @@ function drawTableHeader(doc, y) {
 
   const headers = [
     ['#', cols.no],
+    ['Type', cols.type],
     ['Date', cols.date],
     ['Category', cols.category],
     ['Detail', cols.detail],
@@ -218,7 +243,7 @@ function drawTableHeader(doc, y) {
   doc.fontSize(8).fillColor(COLORS.white);
   for (const [label, col] of headers) {
     const align = label === 'Amount' ? 'right' : 'left';
-    doc.text(label, col.x + 6, y + 7, { width: col.w - 12, align });
+    doc.text(label, col.x + 4, y + 7, { width: col.w - 8, align });
   }
   doc.restore();
 
@@ -254,24 +279,28 @@ function drawTransactionTable(doc, expenses, categoryIndex) {
       .moveTo(PAGE.margin, rowY + rowH)
       .lineTo(PAGE.margin + CONTENT_W, rowY + rowH).stroke();
 
+    const isIncome = item.type === 'in';
+    const amountColor = isIncome ? COLORS.income : COLORS.expense;
     const catIdx = categoryIndex.get(item.category) ?? 0;
-    const catColor = categoryColor(item.category, catIdx);
 
     doc.fontSize(8).fillColor(COLORS.muted)
-      .text(String(item.id), cols.no.x + 6, rowY + 6, { width: cols.no.w - 12 });
+      .text(String(item.id), cols.no.x + 4, rowY + 6, { width: cols.no.w - 8 });
+
+    doc.fillColor(amountColor)
+      .text(isIncome ? 'IN' : 'OUT', cols.type.x + 4, rowY + 6, { width: cols.type.w - 8 });
 
     doc.fillColor(COLORS.text)
-      .text(formatShortDate(item.expense_date), cols.date.x + 6, rowY + 6, { width: cols.date.w - 12 });
+      .text(formatShortDate(item.expense_date), cols.date.x + 4, rowY + 6, { width: cols.date.w - 8 });
 
-    doc.fillColor(catColor)
-      .text(item.category, cols.category.x + 6, rowY + 6, { width: cols.category.w - 12, ellipsis: true });
+    doc.fillColor(categoryColor(item.category, catIdx))
+      .text(item.category, cols.category.x + 4, rowY + 6, { width: cols.category.w - 8, ellipsis: true });
 
     doc.fillColor(COLORS.muted)
-      .text(item.detail || '—', cols.detail.x + 6, rowY + 6, { width: cols.detail.w - 12, ellipsis: true });
+      .text(item.detail || '—', cols.detail.x + 4, rowY + 6, { width: cols.detail.w - 8, ellipsis: true });
 
-    doc.fillColor(COLORS.amount)
-      .text(formatAmount(item.amount), cols.amount.x + 6, rowY + 6, {
-        width: cols.amount.w - 12,
+    doc.fillColor(amountColor)
+      .text(formatAmount(item.amount), cols.amount.x + 4, rowY + 6, {
+        width: cols.amount.w - 8,
         align: 'right',
       });
 
@@ -279,39 +308,32 @@ function drawTransactionTable(doc, expenses, categoryIndex) {
     rowNum++;
   }
 
+  const totals = sumTotals(expenses);
   doc.save();
-  doc.rect(PAGE.margin, rowY, CONTENT_W, 24).fill(COLORS.accentLight);
-  doc.fontSize(9).fillColor(COLORS.primary)
-    .text('TOTAL', PAGE.margin + 160, rowY + 8);
-  doc.fontSize(10).fillColor(COLORS.amount)
-    .text(
-      formatAmount(expenses.reduce((s, e) => s + e.amount, 0)),
-      cols.amount.x + 6,
-      rowY + 7,
-      { width: cols.amount.w - 12, align: 'right' }
-    );
+  doc.rect(PAGE.margin, rowY, CONTENT_W, 36).fill(COLORS.accentLight);
+  doc.fontSize(8.5).fillColor(COLORS.income)
+    .text(`Income: ${formatAmount(totals.totalIn)}`, PAGE.margin + 12, rowY + 8);
+  doc.fillColor(COLORS.expense)
+    .text(`Expenses: ${formatAmount(totals.totalOut)}`, PAGE.margin + 12, rowY + 20);
+  doc.fontSize(10).fillColor(COLORS.net)
+    .text(`Net: ${formatAmount(totals.net)}`, cols.amount.x + 4, rowY + 12, {
+      width: cols.amount.w - 8,
+      align: 'right',
+    });
   doc.restore();
 
-  doc.y = rowY + 36;
+  doc.y = rowY + 48;
 }
 
 function generateReport({ chatId, yearMonth, expenses }) {
   const filename = `report-${yearMonth}-${chatId.replace(/[^a-zA-Z0-9]/g, '')}.pdf`;
   const filepath = path.join(REPORTS_DIR, filename);
 
-  const total = expenses.reduce((sum, e) => sum + e.amount, 0);
-
-  const byCategory = {};
-  for (const exp of expenses) {
-    if (!byCategory[exp.category]) {
-      byCategory[exp.category] = { total: 0, items: [] };
-    }
-    byCategory[exp.category].total += exp.amount;
-    byCategory[exp.category].items.push(exp);
-  }
-
-  const sortedCategories = Object.entries(byCategory).sort((a, b) => b[1].total - a[1].total);
-  const categoryIndex = new Map(sortedCategories.map(([cat], i) => [cat, i]));
+  const totals = sumTotals(expenses);
+  const incomeCategories = groupByCategory(expenses, 'in');
+  const expenseCategories = groupByCategory(expenses, 'out');
+  const allCategories = [...incomeCategories, ...expenseCategories];
+  const categoryIndex = new Map(allCategories.map(([cat], i) => [cat, i]));
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -323,8 +345,9 @@ function generateReport({ chatId, yearMonth, expenses }) {
 
     doc.pipe(stream);
 
-    drawHeader(doc, yearMonth, total, expenses.length, sortedCategories.length);
-    drawCategoryBreakdown(doc, sortedCategories, total);
+    drawHeader(doc, yearMonth, totals, expenses.length);
+    drawCategoryBreakdown(doc, 'Income by Category', incomeCategories, totals.totalIn, COLORS.income);
+    drawCategoryBreakdown(doc, 'Expenses by Category', expenseCategories, totals.totalOut, COLORS.expense);
     drawTransactionTable(doc, expenses, categoryIndex);
 
     const range = doc.bufferedPageRange();
@@ -340,4 +363,4 @@ function generateReport({ chatId, yearMonth, expenses }) {
   });
 }
 
-module.exports = { generateReport, REPORTS_DIR };
+module.exports = { generateReport, REPORTS_DIR, sumTotals };

@@ -62,12 +62,14 @@ app.get('/api/dashboard/stats', require('./api/middleware/auth').requireAuth, (r
   }
 
   const bot = botsRepo.findByUserId(req.user.id);
-  const stats = bot ? expensesRepo.statsForBot(bot.id) : { count: 0, total: 0 };
+  const stats = bot ? expensesRepo.statsForBot(bot.id) : { count: 0, total_in: 0, total_out: 0 };
   const groups = groupsRepo.listForUser(req.user.id, false);
   res.json({
     groups: groups.length,
     expenses: stats.count,
-    totalAmount: stats.total,
+    totalIn: stats.total_in,
+    totalOut: stats.total_out,
+    netBalance: stats.total_in - stats.total_out,
     botStatus: bot?.status,
     botInstanceId: bot?.id,
   });

@@ -65,7 +65,8 @@ function listForUser(userId, isAdmin) {
     rows = db.prepare(`
       SELECT g.*, b.user_id, u.username as owner_username, u.display_name as owner_name,
         (SELECT COUNT(*) FROM expenses e WHERE e.chat_id = g.chat_id AND e.bot_instance_id = g.bot_instance_id) as expense_count,
-        (SELECT COALESCE(SUM(amount),0) FROM expenses e WHERE e.chat_id = g.chat_id AND e.bot_instance_id = g.bot_instance_id) as total_amount
+        (SELECT COALESCE(SUM(CASE WHEN e.type = 'in' THEN e.amount ELSE 0 END), 0) FROM expenses e WHERE e.chat_id = g.chat_id AND e.bot_instance_id = g.bot_instance_id) as total_in,
+        (SELECT COALESCE(SUM(CASE WHEN e.type = 'out' THEN e.amount ELSE 0 END), 0) FROM expenses e WHERE e.chat_id = g.chat_id AND e.bot_instance_id = g.bot_instance_id) as total_out
       FROM groups g
       JOIN bot_instances b ON b.id = g.bot_instance_id
       JOIN users u ON u.id = b.user_id
@@ -75,7 +76,8 @@ function listForUser(userId, isAdmin) {
     rows = db.prepare(`
       SELECT g.*, b.user_id,
         (SELECT COUNT(*) FROM expenses e WHERE e.chat_id = g.chat_id AND e.bot_instance_id = g.bot_instance_id) as expense_count,
-        (SELECT COALESCE(SUM(amount),0) FROM expenses e WHERE e.chat_id = g.chat_id AND e.bot_instance_id = g.bot_instance_id) as total_amount
+        (SELECT COALESCE(SUM(CASE WHEN e.type = 'in' THEN e.amount ELSE 0 END), 0) FROM expenses e WHERE e.chat_id = g.chat_id AND e.bot_instance_id = g.bot_instance_id) as total_in,
+        (SELECT COALESCE(SUM(CASE WHEN e.type = 'out' THEN e.amount ELSE 0 END), 0) FROM expenses e WHERE e.chat_id = g.chat_id AND e.bot_instance_id = g.bot_instance_id) as total_out
       FROM groups g
       JOIN bot_instances b ON b.id = g.bot_instance_id
       WHERE b.user_id = ?

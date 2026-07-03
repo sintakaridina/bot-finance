@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const db = require('./index');
-const { seedTemplates, upgradeTemplatesToEnglish } = require('../services/templateDefaults');
+const { seedTemplates, upgradeTemplatesToEnglish, upgradeTemplatesV3 } = require('../services/templateDefaults');
 
 const ROOT = path.join(__dirname, '../../..');
 const LEGACY_AUTH = path.join(ROOT, '.wwebjs_auth');
@@ -35,6 +35,20 @@ function migrate() {
     upgradeTemplatesToEnglish(db);
     db.pragma('user_version = 2');
     console.log('Upgraded message templates to English (schema v2)');
+  }
+
+  const dbVersionAfter = db.pragma('user_version', { simple: true });
+  if (dbVersionAfter < 3) {
+    upgradeTemplatesV3(db);
+    db.pragma('user_version = 3');
+    console.log('Upgraded templates for income support (schema v3)');
+  }
+
+  const dbVersionLatest = db.pragma('user_version', { simple: true });
+  if (dbVersionLatest < 4) {
+    upgradeTemplatesV3(db);
+    db.pragma('user_version = 4');
+    console.log('Upgraded templates for show - all (schema v4)');
   }
 
   const adminUser = process.env.ADMIN_USERNAME || 'admin';

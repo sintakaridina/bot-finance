@@ -9,8 +9,9 @@ const DEFAULTS = [
   { key: 'unknown', description: 'Unknown command', content: formatUnknownMessage() },
   { key: 'ping', description: 'Ping response ({month})', content: '🏓 *Pong!* Bot is online.\n📅 Current month: *{month}*\n\nType *help* to see all commands.' },
   { key: 'help', description: 'Full help menu', content: formatHelpMessage() },
-  { key: 'expense_saved', description: 'Save confirmation ({id}, {category}, {amount}, {detail}, {month})', content: '✅ *Saved #{id}*\n\n📂 {category}\n💰 {amount}{detail_line}\n📅 {month}' },
-  { key: 'delete_success', description: 'Delete confirmation ({id}, {category}, {amount}, {detail})', content: '🗑️ *Deleted #{id}*\n\n📂 {category}\n💰 {amount}{detail_line}' },
+  { key: 'expense_saved', description: 'Expense save confirmation ({id}, {category}, {amount}, {detail}, {month})', content: '✅ *Saved #{id}* · OUT\n\n📂 {category}\n💰 {amount}{detail_line}\n📅 {month}' },
+  { key: 'income_saved', description: 'Income save confirmation ({id}, {category}, {amount}, {detail}, {month})', content: '✅ *Saved #{id}* · IN\n\n📂 {category}\n💰 {amount}{detail_line}\n📅 {month}' },
+  { key: 'delete_success', description: 'Delete confirmation ({id}, {flow}, {category}, {amount}, {detail})', content: '🗑️ *Deleted #{id}* · {flow}\n\n📂 {category}\n💰 {amount}{detail_line}' },
   { key: 'error_generic', description: 'Generic error', content: '❌ Something went wrong. Please try again later.' },
 ];
 
@@ -23,7 +24,7 @@ function seedTemplates(db) {
   }
 }
 
-function upgradeTemplatesToEnglish(db) {
+function upsertTemplates(db) {
   const upsert = db.prepare(`
     INSERT INTO message_templates (key, content, description) VALUES (?, ?, ?)
     ON CONFLICT(key) DO UPDATE SET
@@ -36,4 +37,12 @@ function upgradeTemplatesToEnglish(db) {
   }
 }
 
-module.exports = { DEFAULTS, seedTemplates, upgradeTemplatesToEnglish };
+function upgradeTemplatesToEnglish(db) {
+  upsertTemplates(db);
+}
+
+function upgradeTemplatesV3(db) {
+  upsertTemplates(db);
+}
+
+module.exports = { DEFAULTS, seedTemplates, upgradeTemplatesToEnglish, upgradeTemplatesV3 };

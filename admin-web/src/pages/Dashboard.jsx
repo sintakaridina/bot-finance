@@ -29,7 +29,9 @@ export default function Dashboard() {
           <>
             <div className="card"><div className="label">My Groups</div><div className="value">{stats.groups}</div></div>
             <div className="card"><div className="label">Transactions This Month</div><div className="value">{stats.expenses}</div></div>
-            <div className="card"><div className="label">Total This Month</div><div className="value" style={{ fontSize: '1.2rem' }}>{formatMoney(stats.totalAmount)}</div></div>
+            <div className="card"><div className="label">Income This Month</div><div className="value" style={{ fontSize: '1.1rem', color: '#15803d' }}>{formatMoney(stats.totalIn)}</div></div>
+            <div className="card"><div className="label">Expenses This Month</div><div className="value" style={{ fontSize: '1.1rem', color: '#b91c1c' }}>{formatMoney(stats.totalOut)}</div></div>
+            <div className="card"><div className="label">Net Balance</div><div className="value" style={{ fontSize: '1.2rem' }}>{formatMoney(stats.netBalance)}</div></div>
             <div className="card"><div className="label">Bot Status</div><div className="value" style={{ fontSize: '1rem' }}>{stats.botStatus || 'offline'}</div></div>
           </>
         )}

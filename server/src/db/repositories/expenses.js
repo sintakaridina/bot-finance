@@ -20,19 +20,21 @@ function findById(id) {
   return db.prepare(`SELECT * FROM expenses WHERE id = ?`).get(id);
 }
 
-function create({ botInstanceId, chatId, category, amount, detail, expenseDate, yearMonth }) {
+function create({ botInstanceId, chatId, type = 'out', category, amount, detail, expenseDate, yearMonth }) {
+  const txType = type === 'in' ? 'in' : 'out';
   const r = db.prepare(`
-    INSERT INTO expenses (bot_instance_id, chat_id, category, amount, detail, expense_date, year_month)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(botInstanceId, chatId, category, amount, detail || null, expenseDate, yearMonth);
+    INSERT INTO expenses (bot_instance_id, chat_id, type, category, amount, detail, expense_date, year_month)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(botInstanceId, chatId, txType, category, amount, detail || null, expenseDate, yearMonth);
   return findById(r.lastInsertRowid);
 }
 
-function update(id, { category, amount, detail, expenseDate, yearMonth }) {
+function update(id, { type, category, amount, detail, expenseDate, yearMonth }) {
+  const txType = type === 'in' ? 'in' : 'out';
   db.prepare(`
-    UPDATE expenses SET category = ?, amount = ?, detail = ?, expense_date = ?, year_month = ?
+    UPDATE expenses SET type = ?, category = ?, amount = ?, detail = ?, expense_date = ?, year_month = ?
     WHERE id = ?
-  `).run(category, amount, detail || null, expenseDate, yearMonth, id);
+  `).run(txType, category, amount, detail || null, expenseDate, yearMonth, id);
   return findById(id);
 }
 
@@ -42,7 +44,7 @@ function remove(id) {
 
 function getMonthExpenses(chatId, botInstanceId, yearMonth) {
   return db.prepare(`
-    SELECT id, category, amount, detail, expense_date, created_at
+    SELECT id, type, category, amount, detail, expense_date, created_at
     FROM expenses WHERE chat_id = ? AND bot_instance_id = ? AND year_month = ?
     ORDER BY expense_date ASC, id ASC
   `).all(chatId, botInstanceId, yearMonth);
@@ -50,7 +52,7 @@ function getMonthExpenses(chatId, botInstanceId, yearMonth) {
 
 function getDayExpenses(chatId, botInstanceId, expenseDate) {
   return db.prepare(`
-    SELECT id, category, amount, detail, expense_date, created_at
+    SELECT id, type, category, amount, detail, expense_date, created_at
     FROM expenses WHERE chat_id = ? AND bot_instance_id = ? AND expense_date = ?
     ORDER BY id ASC
   `).all(chatId, botInstanceId, expenseDate);
@@ -58,7 +60,11 @@ function getDayExpenses(chatId, botInstanceId, expenseDate) {
 
 function listMonths(chatId, botInstanceId) {
   return db.prepare(`
-    SELECT year_month, COUNT(*) as count, SUM(amount) as total
+    SELECT
+      year_month,
+      COUNT(*) as count,
+      COALESCE(SUM(CASE WHEN type = 'in' THEN amount ELSE 0 END), 0) as total_in,
+      COALESCE(SUM(CASE WHEN type = 'out' THEN amount ELSE 0 END), 0) as total_out
     FROM expenses WHERE chat_id = ? AND bot_instance_id = ?
     GROUP BY year_month ORDER BY year_month DESC
   `).all(chatId, botInstanceId);
@@ -79,13 +85,26 @@ function countAll() {
 
 function statsForBot(botInstanceId) {
   return db.prepare(`
-    SELECT COUNT(*) as count, COALESCE(SUM(amount),0) as total
+    SELECT
+      COUNT(*) as count,
+      COALESCE(SUM(CASE WHEN type = 'in' THEN amount ELSE 0 END), 0) as total_in,
+      COALESCE(SUM(CASE WHEN type = 'out' THEN amount ELSE 0 END), 0) as total_out
     FROM expenses WHERE bot_instance_id = ? AND year_month = strftime('%Y-%m', 'now')
   `).get(botInstanceId);
+}
+
+function sumTotals(rows) {
+  let totalIn = 0;
+  let totalOut = 0;
+  for (const row of rows) {
+    if (row.type === 'in') totalIn += row.amount;
+    else totalOut += row.amount;
+  }
+  return { totalIn, totalOut, net: totalIn - totalOut };
 }
 
 module.exports = {
   listByGroup, findById, create, update, remove,
   getMonthExpenses, getDayExpenses, listMonths, deleteByChat,
-  countAll, statsForBot,
+  countAll, statsForBot, sumTotals,
 };

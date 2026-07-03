@@ -42,13 +42,14 @@ router.get('/:id/expenses', (req, res) => {
 router.post('/:id/expenses', (req, res) => {
   const group = getGroupOr403(req, res);
   if (!group) return;
-  const { category, amount, detail, expenseDate, yearMonth } = req.body;
+  const { category, amount, detail, expenseDate, yearMonth, type } = req.body;
   if (!category || !amount || !expenseDate || !yearMonth) {
     return res.status(400).json({ error: 'Incomplete data' });
   }
   const expense = expensesRepo.create({
     botInstanceId: group.bot_instance_id,
     chatId: group.chat_id,
+    type: type || 'out',
     category,
     amount: parseInt(amount, 10),
     detail,
@@ -66,8 +67,9 @@ router.patch('/:id/expenses/:expenseId', (req, res) => {
   if (!existing || existing.chat_id !== group.chat_id) {
     return res.status(404).json({ error: 'Transaction not found' });
   }
-  const { category, amount, detail, expenseDate, yearMonth } = req.body;
+  const { category, amount, detail, expenseDate, yearMonth, type } = req.body;
   const updated = expensesRepo.update(expenseId, {
+    type: type ?? existing.type ?? 'out',
     category: category ?? existing.category,
     amount: parseInt(amount ?? existing.amount, 10),
     detail: detail !== undefined ? detail : existing.detail,

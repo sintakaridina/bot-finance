@@ -1,18 +1,18 @@
 # Finance Bot Platform
 
-WhatsApp expense tracker + **Web Admin** for multi-group, multi-user monitoring.
+WhatsApp group finance tracker + **Web Admin** for multi-group, multi-user monitoring.
 
 ## Features
 
 ### WhatsApp Bot
-- Record expenses per group (`out - category - amount - detail`)
-- `show`, `delete`, monthly PDF `report`
+- Record income & expenses per group (`in` / `out - category - amount - detail`)
+- `show`, `show - all`, `delete`, monthly PDF `report`
 - Smart greetings (`hi`) & unknown command responses
 - Data isolated per group and per user
 
 ### Web Admin
 - **Admin**: monitor all users/groups, edit bot messages, manage users, reset passwords
-- **User**: own groups & expenses, connect WA via QR, download PDF reports
+- **User**: own groups & transactions, connect WA via QR, download PDF reports
 - Real-time status & QR via Socket.io
 
 ## Requirements
@@ -113,8 +113,10 @@ After login, open **Connect WA** and scan the QR code to activate the bot.
 
 | Command | Example |
 |---------|---------|
+| Record income | `in - salary - 5000000 - March payroll` |
 | Record expense | `out - food - 50000 - lunch` |
 | View today | `show` |
+| View this month | `show - all` |
 | Delete | `delete - 12` |
 | PDF report | `report - 2026/07` |
 | Help | `help` or `menu` |
@@ -160,7 +162,7 @@ finance-bot/
 | Manage users | Yes | No |
 | Edit bot messages | Yes | No |
 | All groups | Yes | Own bot groups |
-| CRUD expenses | Yes | Own data |
+| CRUD transactions | Yes | Own data |
 | Connect WA (QR) | All bots | Own bot |
 
 ## Git — Do Not Push

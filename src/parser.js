@@ -52,7 +52,17 @@ function parseMessage(text) {
   }
 
   if (lower === 'show') {
-    return { type: 'show' };
+    return { type: 'show', scope: 'day' };
+  }
+
+  if (lower.startsWith('show')) {
+    const parts = trimmed.split(/\s*-\s*/).map((p) => p.trim());
+    if (parts[0].toLowerCase() === 'show' && parts.length >= 2) {
+      if (parts[1].toLowerCase() === 'all') {
+        return { type: 'show', scope: 'month' };
+      }
+      return { type: 'error', message: 'Format: show or show - all' };
+    }
   }
 
   if (['help', 'menu', 'bantuan', '?'].includes(lower)) {
@@ -90,7 +100,32 @@ function parseMessage(text) {
     return { type: 'report', yearMonth };
   }
 
-  let body = trimmed;
+  if (lower.startsWith('in')) {
+    const parts = trimmed.split(/\s*-\s*/).map((p) => p.trim());
+    if (parts[0].toLowerCase() === 'in') {
+      if (parts.length < 3) {
+        return {
+          type: 'error',
+          message: 'Format: in - category - amount - detail (detail optional)\nExample: in - salary - 5000000 - March payroll',
+        };
+      }
+      const [, category, amountRaw, ...detailParts] = parts;
+      const amount = parseAmount(amountRaw);
+      if (!amount) {
+        return { type: 'error', message: 'Invalid amount. Example: 5000 or 15000' };
+      }
+      if (!category) {
+        return { type: 'error', message: 'Category is required.' };
+      }
+      return {
+        type: 'income',
+        category,
+        amount,
+        detail: detailParts.join(' - ').trim() || null,
+      };
+    }
+  }
+
   if (lower.startsWith('out')) {
     const parts = trimmed.split(/\s*-\s*/).map((p) => p.trim());
     if (parts.length < 3) {
@@ -142,7 +177,7 @@ const LINE = '────────────────────';
 function formatHelpMessage() {
   return [
     '📒 *FINANCE BOT*',
-    '_Group expense tracker_',
+    '_Group finance tracker_',
     '',
     LINE,
     '⚡ *GENERAL*',
@@ -155,17 +190,28 @@ function formatHelpMessage() {
     '  Show this guide',
     '',
     LINE,
+    '💰 *RECORD INCOME*',
+    LINE,
+    '',
+    '▸ *in - category - amount - detail*',
+    '  Record money received',
+    '  _(detail is optional)_',
+    '',
+    '  Example:',
+    '  in - salary - 5000000 - March payroll',
+    '',
+    LINE,
     '💸 *RECORD EXPENSE*',
     LINE,
     '',
     '▸ *out - category - amount - detail*',
-    '  Record a new transaction',
+    '  Record money spent',
     '  _(detail is optional)_',
     '',
     '  Example:',
     '  out - snacks - 5000 - coffee',
     '',
-    '  Short form:',
+    '  Short form (expense only):',
     '  snacks - 5000 - coffee',
     '',
     LINE,
@@ -173,8 +219,11 @@ function formatHelpMessage() {
     LINE,
     '',
     '▸ *show*',
-    "  View today's expenses",
-    '  _(shows ID, category, amount)_',
+    "  View today's transactions",
+    '',
+    '▸ *show - all*',
+    '  View this month\'s transactions',
+    '  _(shows ID, type, category, amount)_',
     '',
     '▸ *delete - id*',
     '  Remove a transaction',
@@ -207,7 +256,7 @@ function formatPingMessage(monthLabel) {
 }
 
 function formatGreetingMessage(name) {
-  return `Hi *${name}*, I'm your expense tracker bot. Type *help* to see the command list!`;
+  return `Hi *${name}*, I'm your group finance tracker bot. Type *help* to see the command list!`;
 }
 
 function formatUnknownMessage() {
@@ -237,37 +286,87 @@ function formatDateLabel(dateStr) {
   return `${d.date()} ${MONTH_NAMES[d.month()]} ${d.year()}`;
 }
 
-function formatDayExpenses(expenses, dateLabel) {
+function formatShortDay(dateStr) {
+  const d = dayjs.tz(dateStr, TZ);
+  return `${d.date()} ${MONTH_NAMES[d.month()].slice(0, 3)}`;
+}
+
+function sumTransactions(expenses) {
+  let totalIn = 0;
+  let totalOut = 0;
+  for (const e of expenses) {
+    if (e.type === 'in') totalIn += e.amount;
+    else totalOut += e.amount;
+  }
+  return { totalIn, totalOut, net: totalIn - totalOut };
+}
+
+function formatTransactionList(expenses, { title, periodLabel, showDate = false, maxItems = 50 }) {
   if (expenses.length === 0) {
     return [
-      "📋 *Today's Expenses*",
-      `📅 ${dateLabel}`,
+      title,
+      `📅 ${periodLabel}`,
       '',
       '_No transactions yet._',
       '',
-      'Record with:',
+      'Record income:',
+      'in - category - amount - detail',
+      '',
+      'Record expense:',
       'out - category - amount - detail',
     ].join('\n');
   }
 
-  const lines = expenses.map((e) => {
+  const visible = expenses.slice(0, maxItems);
+  const hidden = expenses.length - visible.length;
+
+  const lines = visible.map((e) => {
     const detail = e.detail ? `\n     📝 ${e.detail}` : '';
-    return `  *#${e.id}*  ${e.category}\n     💰 ${formatRupiah(e.amount)}${detail}`;
+    const flow = e.type === 'in' ? '📥 IN' : '📤 OUT';
+    const dateSuffix = showDate ? ` · ${formatShortDay(e.expense_date)}` : '';
+    return `  *#${e.id}*  ${flow} · ${e.category}${dateSuffix}\n     💰 ${formatRupiah(e.amount)}${detail}`;
   });
 
-  const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const { totalIn, totalOut, net } = sumTransactions(expenses);
 
-  return [
-    "📋 *Today's Expenses*",
-    `📅 ${dateLabel}`,
+  const parts = [
+    title,
+    `📅 ${periodLabel}`,
     '',
     ...lines,
+  ];
+
+  if (hidden > 0) {
+    parts.push('', `_...and ${hidden} more. Download the monthly PDF with *report - YYYY/MM*._`);
+  }
+
+  parts.push(
     '',
     LINE,
-    `💰 *Total:* ${formatRupiah(total)}`,
+    `📥 *Income:* ${formatRupiah(totalIn)}`,
+    `📤 *Expenses:* ${formatRupiah(totalOut)}`,
+    `💰 *Net:* ${formatRupiah(net)}`,
     '',
     '_Delete:_ delete - id',
-  ].join('\n');
+  );
+
+  return parts.join('\n');
+}
+
+function formatDayExpenses(expenses, dateLabel) {
+  return formatTransactionList(expenses, {
+    title: "📋 *Today's Transactions*",
+    periodLabel: dateLabel,
+    showDate: false,
+  });
+}
+
+function formatMonthExpenses(expenses, monthLabel) {
+  return formatTransactionList(expenses, {
+    title: "📋 *This Month's Transactions*",
+    periodLabel: monthLabel,
+    showDate: true,
+  });
 }
 
 module.exports = {
@@ -278,6 +377,8 @@ module.exports = {
   formatMonthLabel,
   formatDateLabel,
   formatDayExpenses,
+  formatMonthExpenses,
+  formatTransactionList,
   formatHelpMessage,
   formatPingMessage,
   formatGreetingMessage,

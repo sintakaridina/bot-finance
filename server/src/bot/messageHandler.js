@@ -11,6 +11,7 @@ const {
   formatMonthLabel,
   formatDateLabel,
   formatDayExpenses,
+  formatMonthExpenses,
 } = require('../../../src/parser');
 
 async function getDisplayName(msg) {
@@ -24,6 +25,10 @@ async function getDisplayName(msg) {
 
 function detailLine(detail) {
   return detail ? `\n📝 ${detail}` : '';
+}
+
+function flowLabel(type) {
+  return type === 'in' ? 'IN' : 'OUT';
 }
 
 function createMessageHandler({ botInstanceId, getClient }) {
@@ -68,6 +73,7 @@ function createMessageHandler({ botInstanceId, getClient }) {
         const expense = expensesRepo.create({
           botInstanceId,
           chatId,
+          type: 'out',
           category: parsed.category,
           amount: parsed.amount,
           detail: parsed.detail,
@@ -85,10 +91,40 @@ function createMessageHandler({ botInstanceId, getClient }) {
         break;
       }
 
-      case 'show': {
+      case 'income': {
+        const yearMonth = currentYearMonth();
         const expenseDate = currentDate();
-        const expenses = expensesRepo.getDayExpenses(chatId, botInstanceId, expenseDate);
-        await msg.reply(formatDayExpenses(expenses, formatDateLabel(expenseDate)));
+        const income = expensesRepo.create({
+          botInstanceId,
+          chatId,
+          type: 'in',
+          category: parsed.category,
+          amount: parsed.amount,
+          detail: parsed.detail,
+          expenseDate,
+          yearMonth,
+        });
+        const body = render('income_saved', {
+          id: income.id,
+          category: parsed.category,
+          amount: formatRupiah(parsed.amount),
+          detail_line: detailLine(parsed.detail),
+          month: formatMonthLabel(yearMonth),
+        });
+        await msg.reply(body || `✅ Saved #${income.id}`);
+        break;
+      }
+
+      case 'show': {
+        if (parsed.scope === 'month') {
+          const yearMonth = currentYearMonth();
+          const expenses = expensesRepo.getMonthExpenses(chatId, botInstanceId, yearMonth);
+          await msg.reply(formatMonthExpenses(expenses, formatMonthLabel(yearMonth)));
+        } else {
+          const expenseDate = currentDate();
+          const expenses = expensesRepo.getDayExpenses(chatId, botInstanceId, expenseDate);
+          await msg.reply(formatDayExpenses(expenses, formatDateLabel(expenseDate)));
+        }
         break;
       }
 
@@ -100,6 +136,7 @@ function createMessageHandler({ botInstanceId, getClient }) {
         }
         const body = render('delete_success', {
           id: deleted.id,
+          flow: flowLabel(deleted.type),
           category: deleted.category,
           amount: formatRupiah(deleted.amount),
           detail_line: detailLine(deleted.detail),
@@ -113,13 +150,19 @@ function createMessageHandler({ botInstanceId, getClient }) {
         if (months.length === 0) {
           await msg.reply([
             '📊 *Available Months*', '', '_No data yet._', '',
-            'Record: out - category - amount - detail',
+            'Record income: in - category - amount - detail',
+            'Record expense: out - category - amount - detail',
           ].join('\n'));
           break;
         }
         const lines = months.map((m) => {
           const label = formatMonthLabel(m.year_month);
-          return `▸ *${label}*\n  ${m.count} transactions · ${formatRupiah(m.total)}`;
+          const net = m.total_in - m.total_out;
+          return [
+            `▸ *${label}*`,
+            `  ${m.count} transactions`,
+            `  📥 ${formatRupiah(m.total_in)} · 📤 ${formatRupiah(m.total_out)} · 💰 Net ${formatRupiah(net)}`,
+          ].join('\n');
         });
         await msg.reply(['📊 *Available Months*', '', ...lines, '', 'report - YYYY/MM'].join('\n'));
         break;
@@ -135,9 +178,14 @@ function createMessageHandler({ botInstanceId, getClient }) {
         const { generateReport } = require('../../../src/report');
         const pdfPath = await generateReport({ chatId, yearMonth: parsed.yearMonth, expenses });
         const media = MessageMedia.fromFilePath(pdfPath);
-        const total = expenses.reduce((s, e) => s + e.amount, 0);
+        const { totalIn, totalOut, net } = expensesRepo.sumTotals(expenses);
         await client.sendMessage(chatId, media, {
-          caption: `📊 *Report ${formatMonthLabel(parsed.yearMonth)}*\n${expenses.length} transactions • Total ${formatRupiah(total)}`,
+          caption: [
+            `📊 *Report ${formatMonthLabel(parsed.yearMonth)}*`,
+            `${expenses.length} transactions`,
+            `📥 Income ${formatRupiah(totalIn)} · 📤 Expenses ${formatRupiah(totalOut)}`,
+            `💰 Net ${formatRupiah(net)}`,
+          ].join('\n'),
         });
         fs.unlink(pdfPath, () => {});
         break;
@@ -148,7 +196,7 @@ function createMessageHandler({ botInstanceId, getClient }) {
         break;
 
       case 'help':
-        await msg.reply(render('help') || 'Type: out - category - amount');
+        await msg.reply(render('help') || 'Type: in/out - category - amount');
         break;
 
       default:

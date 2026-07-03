@@ -53,6 +53,60 @@ class BotManager {
     } catch { /* ignore */ }
   }
 
+  async ensureChromeStopped(sessionId, maxWaitMs = 6000) {
+    if (!this.isChromeRunning(sessionId)) return;
+    this.killStaleChrome(sessionId);
+    const deadline = Date.now() + maxWaitMs;
+    while (this.isChromeRunning(sessionId) && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 500));
+      if (this.isChromeRunning(sessionId)) {
+        try {
+          execSync(`pkill -9 -f "data/sessions/${sessionId}/session" || true`, { stdio: 'ignore' });
+        } catch { /* ignore */ }
+      }
+    }
+  }
+
+  clearBrowserLocks(sessionId) {
+    const profileDir = path.join(SESSIONS_DIR, sessionId, `session-${sessionId}`);
+    if (!fs.existsSync(profileDir)) return;
+
+    for (const file of ['SingletonLock', 'SingletonSocket', 'SingletonCookie', 'DevToolsActivePort']) {
+      const target = path.join(profileDir, file);
+      if (fs.existsSync(target)) {
+        try { fs.rmSync(target, { force: true }); } catch { /* ignore */ }
+      }
+    }
+
+    for (const dir of ['Default/Cache', 'Default/Code Cache', 'Default/GPUCache', 'Default/Service Worker']) {
+      const target = path.join(profileDir, dir);
+      if (fs.existsSync(target)) {
+        try { fs.rmSync(target, { recursive: true, force: true }); } catch { /* ignore */ }
+      }
+    }
+  }
+
+  async initializeClient(instanceId, client) {
+    const timeoutMs = 90000;
+    try {
+      await Promise.race([
+        client.initialize(),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('initialize timeout')), timeoutMs);
+        }),
+      ]);
+    } catch (err) {
+      console.error(`Bot ${instanceId} initialize failed:`, err.message);
+      await this.stopInstance(instanceId, { updateDb: false });
+      const inst = botsRepo.findById(instanceId);
+      if (inst) {
+        await this.ensureChromeStopped(inst.session_id);
+        this.clearBrowserLocks(inst.session_id);
+      }
+      throw err;
+    }
+  }
+
   async resetSession(instanceId) {
     const instance = botsRepo.findById(instanceId);
     if (!instance) throw new Error('Bot instance not found');
@@ -88,8 +142,8 @@ class BotManager {
     }
 
     if (killChrome || this.isChromeRunning(instance.session_id)) {
-      this.killStaleChrome(instance.session_id);
-      await new Promise((r) => setTimeout(r, 1500));
+      await this.ensureChromeStopped(instance.session_id);
+      this.clearBrowserLocks(instance.session_id);
     }
 
     const sessionPath = path.join(SESSIONS_DIR, instance.session_id);
@@ -162,7 +216,7 @@ class BotManager {
         this.emit(instanceId, 'bot:status', { status: 'connecting' });
         setTimeout(() => {
           if (!this.clients.has(instanceId) && !this.shuttingDown) {
-            this.startInstance(instanceId, { killChrome: false }).catch((err) => {
+            this.startInstance(instanceId, { killChrome: true }).catch((err) => {
               console.error(`Bot ${instanceId} reconnect failed:`, err.message);
             });
           }
@@ -194,16 +248,15 @@ class BotManager {
     this.emit(instanceId, 'bot:status', { status: 'connecting' });
 
     try {
-      await client.initialize();
+      await this.initializeClient(instanceId, client);
     } catch (err) {
-      console.error(`Bot ${instanceId} initialize failed:`, err.message);
-      await this.stopInstance(instanceId, { updateDb: false });
       throw err;
     }
   }
 
   async stopInstance(instanceId, { updateDb = true } = {}) {
     const client = this.clients.get(instanceId);
+    const instance = botsRepo.findById(instanceId);
     this.stoppingInstances.add(instanceId);
     if (client) {
       try {
@@ -213,6 +266,10 @@ class BotManager {
     }
     this.stoppingInstances.delete(instanceId);
     this.qrCodes.delete(instanceId);
+
+    if (instance) {
+      await this.ensureChromeStopped(instance.session_id);
+    }
 
     if (updateDb) {
       this.statuses.set(instanceId, 'disconnected');
@@ -238,6 +295,9 @@ class BotManager {
     for (const id of ids) {
       await this.stopInstance(id, { updateDb: false });
     }
+    for (const inst of botsRepo.listReconnectable()) {
+      await this.ensureChromeStopped(inst.session_id);
+    }
   }
 
   async startAllReady() {
@@ -249,8 +309,16 @@ class BotManager {
     console.log(`Auto-reconnecting ${targets.length} bot(s) with saved sessions...`);
     for (const inst of targets) {
       try {
-        await this.startInstance(inst.id, { killChrome: false });
-        await new Promise((r) => setTimeout(r, 5000));
+        await this.startInstance(inst.id, { killChrome: true });
+        const status = this.getStatus(inst.id);
+        if (status !== 'ready') {
+          console.log(`Bot ${inst.id} not ready after first attempt, retrying...`);
+          await this.ensureChromeStopped(inst.session_id);
+          this.clearBrowserLocks(inst.session_id);
+          await new Promise((r) => setTimeout(r, 2000));
+          await this.startInstance(inst.id, { killChrome: true });
+        }
+        await new Promise((r) => setTimeout(r, 3000));
       } catch (err) {
         console.error(`Failed to reconnect bot ${inst.id}:`, err.message);
       }

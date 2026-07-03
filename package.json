@@ -1,7 +1,7 @@
 {
   "name": "finance-bot",
   "version": "2.0.0",
-  "description": "WhatsApp expense tracker with multi-tenant web admin platform",
+  "description": "WhatsApp group finance tracker with multi-tenant web admin platform",
   "scripts": {
     "start": "node server/src/server.js",
     "migrate": "node server/src/db/migrate.js",

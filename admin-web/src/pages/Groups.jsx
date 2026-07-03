@@ -22,7 +22,9 @@ export default function Groups() {
               <th>Group Name</th>
               {isAdmin && <th>Owner</th>}
               <th>Transactions</th>
-              <th>Total</th>
+              <th>Income</th>
+              <th>Expenses</th>
+              <th>Net</th>
               <th>Last Active</th>
               <th></th>
             </tr>
@@ -33,13 +35,15 @@ export default function Groups() {
                 <td>{g.display_name || 'WhatsApp Group'}</td>
                 {isAdmin && <td>{g.owner_name || g.owner_username}</td>}
                 <td>{g.expense_count}</td>
-                <td>{formatMoney(g.total_amount)}</td>
+                <td style={{ color: '#15803d' }}>{formatMoney(g.total_in)}</td>
+                <td style={{ color: '#b91c1c' }}>{formatMoney(g.total_out)}</td>
+                <td>{formatMoney((g.total_in || 0) - (g.total_out || 0))}</td>
                 <td>{g.last_activity_at ? new Date(g.last_activity_at).toLocaleString('en-US') : '-'}</td>
                 <td><Link to={`/groups/${g.id}`} className="btn btn-sm btn-secondary">Details</Link></td>
               </tr>
             ))}
             {!groups.length && (
-              <tr><td colSpan={isAdmin ? 6 : 5} style={{ textAlign: 'center', color: '#94a3b8' }}>No groups yet</td></tr>
+              <tr><td colSpan={isAdmin ? 8 : 7} style={{ textAlign: 'center', color: '#94a3b8' }}>No groups yet</td></tr>
             )}
           </tbody>
         </table>
